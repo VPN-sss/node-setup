@@ -24,8 +24,13 @@ if [[ $action == 2 && ! -f /opt/remnanode/docker-compose.yml ]]; then
 fi
 printf '\n  1. %s\n' "$(text 'Последний Xray — официальный актуальный релиз' 'Latest Xray — current official release')"
 printf '  2. %s\n\n' "$(text 'Проверенный Xray 26.7.28 — Firefox/mihomo' 'Tested Xray 26.7.28 — Firefox/mihomo')"
-builtin read -r -p "$(text 'Версия [1]: ' 'Version [1]: ')" version
-case "$version" in ''|1) channel=latest;;2) channel=verified;;*) exit 1;;esac
+builtin read -r -p "$(text 'Версия [1/2, Enter — отмена]: ' 'Version [1/2, Enter — cancel]: ')" version
+case "$version" in 1) channel=latest;;2) channel=verified;;'') exit 0;;*) exit 1;;esac
+if [[ $channel == latest ]]; then
+    printf '%s\n' "$(text 'Последний релиз может не работать со старыми Koala/mihomo и Firefox. Для проверенного варианта выбери 26.7.28.' 'The latest release may not work with older Koala/mihomo and Firefox. Choose 26.7.28 for the tested compatibility option.')"
+    builtin read -r -p "$(text 'Продолжить с последним релизом? [y/N]: ' 'Continue with the latest release? [y/N]: ')" confirm
+    [[ $confirm =~ ^[Yy]$ ]] || exit 0
+fi
 if [[ $channel == verified ]]; then
     printf '%s\n' "$(text 'Это старый релиз, а не гарантия безопасности или обхода. MPTCP будет отключён для процесса.' 'Older release, not a security or bypass guarantee. Process MPTCP will be disabled.')"
     builtin read -r -p "$(text 'Продолжить с 26.7.28? [y/N]: ' 'Continue with 26.7.28? [y/N]: ')" confirm

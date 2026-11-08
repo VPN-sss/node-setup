@@ -18,6 +18,9 @@ Xray. При новой установке отдельно выбирается
 
 - `Latest` resolves the current official Xray release when executed; it is not
   a frozen version. Downloads require an upstream SHA256 digest.
+- Version choice is explicit: Enter cancels. Latest also warns that older
+  Koala/mihomo with Firefox may be incompatible; neither option is silently
+  installed without confirmation.
 - `Tested 26.7.28` is a Firefox/mihomo compatibility workaround, **not a claim
   that an old release is more secure or universally stable**. On amd64 its
   archive SHA256 is pinned in source.
@@ -64,6 +67,7 @@ output remain English. WARP is optional and disabled unless requested.
 
 ```bash
 python3 -B -m unittest discover -s tests
+bash tests/test_ui.sh
 for script in install.sh legacy-install.sh lib/ui.sh; do bash -n "$script" || exit; done
 bash install.sh --help
 ```
