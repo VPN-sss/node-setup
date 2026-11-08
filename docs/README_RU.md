@@ -30,7 +30,7 @@
 
 1. Клонируйте репозиторий:
   ```bash
-   git clone https://github.com/x1roko/node-setup.git
+   git clone https://github.com/VPN-sss/node-setup.git
   ```
 2. Перейдите в папку проекта:
   ```bash
@@ -47,7 +47,7 @@
 ## 🚀 Установка одной командой
 
 ```bash
-git clone https://github.com/x1roko/node-setup.git && cd node-setup && sudo chmod +x install.sh && sudo ./install.sh 
+git clone https://github.com/VPN-sss/node-setup.git && cd node-setup && sudo chmod +x install.sh && sudo ./install.sh
 ```
 
 ## ⌨️ Параметры ввода

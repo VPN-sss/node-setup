@@ -30,7 +30,7 @@ The script fully configures a server from scratch:
 
 1. Clone the repository:
   ```bash
-   git clone https://github.com/x1roko/node-setup.git
+   git clone https://github.com/VPN-sss/node-setup.git
   ```
 2. Navigate to the project folder:
   ```bash

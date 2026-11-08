@@ -32,7 +32,7 @@
 
 1. 克隆仓库：
   ```bash
-   git clone https://github.com/x1roko/node-setup.git
+   git clone https://github.com/VPN-sss/node-setup.git
   ```
 2. 进入项目文件夹：
   ```bash
