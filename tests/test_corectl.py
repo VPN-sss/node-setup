@@ -25,7 +25,11 @@ class CorePolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):core.managed_override(raw)
 
     def test_own_override_is_allowed(self):
-        core.managed_override(json.dumps({core.MARKER:True}));core.managed_override(None)
+        core.managed_override(json.dumps({core.MARKER:True,'services':{'remnanode':{'image':'sha256:test','environment':{'GODEBUG':'multipathtcp=0'},'volumes':[{'target':'/usr/local/bin/xray'}]}}}));core.managed_override(None)
+
+    def test_extended_managed_override_is_not_overwritten(self):
+        cfg={core.MARKER:True,'services':{'remnanode':{'image':'sha256:test','environment':{'GODEBUG':'multipathtcp=0'},'volumes':[{'target':'/usr/local/bin/xray'}],'mem_limit':'1g'}}}
+        with self.assertRaises(ValueError):core.managed_override(json.dumps(cfg))
 
     def test_state_must_be_within_managed_directory(self):
         with self.assertRaises(ValueError):core.state_path('/tmp')

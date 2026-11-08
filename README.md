@@ -61,7 +61,7 @@ output remain English. WARP is optional and disabled unless requested.
 
 ```bash
 python3 -B -m unittest discover -s tests
-bash -n install.sh legacy-install.sh lib/ui.sh
+for script in install.sh legacy-install.sh lib/ui.sh; do bash -n "$script" || exit; done
 bash install.sh --help
 ```
 

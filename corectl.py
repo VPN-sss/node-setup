@@ -86,6 +86,10 @@ def managed_override(raw):
     try:cfg=json.loads(raw)
     except ValueError:raise ValueError('Existing non-managed override: merge manually, do not overwrite')
     if cfg.get(MARKER) is not True:raise ValueError('Existing override belongs to another deployment')
+    if set(cfg)!={MARKER,'services'} or set(cfg.get('services',{}))!={'remnanode'}:raise ValueError('Managed override contains additional settings; preserve it for manual merge')
+    service=cfg['services']['remnanode']
+    if set(service)!={'image','environment','volumes'} or set(service['environment'])!={'GODEBUG'}:raise ValueError('Managed override was extended; manual merge required')
+    if len(service['volumes'])!=1 or service['volumes'][0].get('target')!='/usr/local/bin/xray':raise ValueError('Additional volume configuration must be preserved manually')
 
 
 def state_path(value):
