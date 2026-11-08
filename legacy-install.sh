@@ -215,6 +215,7 @@ else
     echo "1) Standalone (HTTP/TLS-ALPN-01 on port 8443 - requires this port reachable from the internet)"
     echo "2) DNS-01 via Cloudflare (certbot + API Token only, no inbound port needed)"
     read -p "Enter choice [1-2]: " VALIDATION_CHOICE
+    VALIDATION_CHOICE=${VALIDATION_CHOICE:-2}
 
     if [ "$VALIDATION_CHOICE" == "2" ]; then
         echo "--- Cloudflare DNS-01 challenge (certbot) ---"
@@ -507,8 +508,10 @@ echo "Selected Service: $SERVICE_NAME"
 echo "Domain: $DOMAIN"
 echo "Certificate source: $CERT_SOURCE"
 echo "Remnanode Port: 2222"
-echo "Checking WARP SOCKS5 proxy..."
-curl -s --connect-timeout 4 --max-time 6 -x socks5h://127.0.0.1:40000 ifconfig.me
+if [[ "$INSTALL_WARP" =~ ^[Yy]$ ]]; then
+    echo "Checking WARP SOCKS5 proxy..."
+    curl -s --connect-timeout 4 --max-time 6 -x socks5h://127.0.0.1:40000 ifconfig.me || echo "WARP check failed; the node installation is preserved."
+fi
 echo ""
 echo "------------------------------------------------"
 # read -p "Do you want to generate a ready-to-use Xray-core server config (VLESS+REALITY)? [y/N]: " SHOW_CONFIG

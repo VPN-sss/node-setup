@@ -41,6 +41,9 @@ Xray. При новой установке отдельно выбирается
 
 - New nodes are explicitly marked fresh: binary/version checks do **not**
   claim client connectivity before a profile is assigned in the panel.
+- For a fresh self-steal certificate, DNS-01 via Cloudflare is the default on
+  Enter. The inherited standalone ALPN option requires external port 443 to
+  reach its local port 8443; it is not automatic port forwarding.
 - A private `/opt/remnanode/profile-template.json` is generated for new nodes.
   Import it into the panel; it contains `minClientVer: "1.8.2"` on REALITY.
   Set the panel host fingerprint to **firefox**. Existing panel profiles are
