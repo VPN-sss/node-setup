@@ -26,12 +26,14 @@ def inspect_pin():
         return {}, 'unknown'
     fields={'version':m['version']}
     container=json.loads(core.run(['docker','inspect','remnanode']))[0]
-    fields['compose']=core.sha(override)==m['override_sha'] and core.sha(core.ROOT/'docker-compose.yml')==m['compose_sha']
+    fields['compose']=core.sha(override)==m['override_sha'] and core.sha(core.ROOT/'docker-compose.yml')==m.get('pinned_base_sha',m['compose_sha'])
+    if 'fragment_sha' in m:fields['compose'] &= core.sha(state/'core-pin.json')==m['fragment_sha']
     fields['mount']=any(v.get('Type')=='bind' and v.get('Destination')=='/usr/local/bin/xray' and
                         v.get('Source')==str(src) and v.get('RW') is False for v in container['Mounts'])
+    # A base-only updater may legitimately change the agent image, independently of Xray.
     fields['image']=container['Image']==m['image']
     fields['file']=core.sha(src)==m['binary_sha']
-    if not all(fields[k] for k in ('compose','mount','image','file')):
+    if not all(fields[k] for k in ('compose','mount','file')) or (not fields['image'] and 'fragment_sha' not in m):
         return fields,'drift'
     if not container['State']['Running']:
         return fields,'stopped'
@@ -40,7 +42,7 @@ def inspect_pin():
     if len(matches)!=1 or not matches[0].isdigit():
         return fields,'unverified'
     fields['process']=core.sha(Path('/proc')/matches[0]/'exe')==m['binary_sha']
-    if not fields['process']:return fields,'drift'
+    if not fields['process'] or not fields['image']:return fields,'drift'
     timer=subprocess.run(['systemctl','show','-p','ActiveState','--value',m['unit']+'.timer'],
                          capture_output=True,text=True,timeout=8)
     if timer.returncode or timer.stdout.strip() not in ('active','inactive'):return fields,'unknown'

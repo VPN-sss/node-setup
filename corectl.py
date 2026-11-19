@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import secrets
 import shutil
 import socket
@@ -159,12 +160,73 @@ def atomic_text(path, text):
         Path(name).unlink(missing_ok=True)
 
 
+def with_core_extension(raw, state):
+    ref={'file':str(state/'core-pin.json'),'service':'ham_core_pin'}
+    def owned(value):
+        return (isinstance(value,dict) and set(value)=={'file','service'} and value['service']=='ham_core_pin'
+                and Path(value['file']).parent.parent==state.parent and Path(value['file']).name=='core-pin.json')
+    if raw.lstrip().startswith('{'):
+        cfg=json.loads(raw);service=cfg['services']['remnanode']
+        if 'extends' in service and not owned(service['extends']):raise ValueError('Foreign Compose extends; manual review required')
+        service['extends']=ref
+        return json.dumps(cfg,ensure_ascii=False,indent=2)+'\n'
+    # Only edit the plain block layout our installer emits. Do not reserialize arbitrary YAML.
+    pattern=r'(?m)^  remnanode:[ \t]*\n((?:(?:    [^\n]*|[ \t]*)\n)*)'
+    matches=list(re.finditer(pattern,raw))
+    if len(matches)!=1:raise ValueError('Unsupported Compose layout; original preserved')
+    block=matches[0].group(1)
+    marker='    extends: '+json.dumps(ref)+' # ham-core-pin\n'
+    if re.search(r'(?m)^    extends:',block):
+        prior=re.search(r'(?m)^    extends: (\{.*\}) # ham-core-pin\n',block)
+        if not prior or not owned(json.loads(prior[1])):raise ValueError('Foreign Compose extends; manual review required')
+        block=block[:prior.start()]+block[prior.end():]
+    a,b=matches[0].span(1)
+    return raw[:a]+marker+block+raw[b:]
+
+
+def persist_core(state,m):
+    base=ROOT/'docker-compose.yml'; override=ROOT/'docker-compose.override.yml'
+    if sha(state/'operation.py')!=sha(__file__):raise ValueError('Use the installer version that prepared this transaction')
+    if base.is_symlink() or sha(base)!=m['compose_sha'] or sha(state/'compose.before.yml')!=m['compose_sha']:
+        raise ValueError('Base Compose changed; refusing pin')
+    if sha(state/'xray')!=m['binary_sha'] or sha(override)!=m['override_sha']:raise ValueError('Pin artifacts changed')
+    service=json.loads(override.read_bytes())['services']['remnanode']
+    fragment={key:service[key] for key in ('environment','volumes')}
+    atomic_text(state/'core-pin.json',json.dumps({'services':{'ham_core_pin':fragment}}))
+    candidate=state/'base.next.yml'
+    atomic_text(candidate,with_core_extension(base.read_text(),state))
+    def model(*files):
+        args=['docker','compose','--project-directory',str(ROOT)]
+        for f in files:args+=['-f',str(f)]
+        cfg=json.loads(run(args+['config','--format','json']))
+        cfg.pop(MARKER,None)
+        svc=cfg['services']['remnanode']
+        if 'volumes' in svc:svc['volumes'].sort(key=lambda mount:mount['target'])
+        return cfg
+    expected=model(base,override)
+    if model(candidate,override)!=expected:raise ValueError('Effective Compose changed; refusing pin')
+    # Base-only updates retain the original agent image policy, but must mount the same core.
+    expected['services']['remnanode']['image']=model(base)['services']['remnanode']['image']
+    if model(candidate)!=expected:raise ValueError('Base alone cannot reproduce the pin; refusing change')
+    if sha(base)!=m['compose_sha'] or sha(override)!=m['override_sha']:raise ValueError('Concurrent Compose change')
+    m['pinned_base_sha']=sha(candidate)
+    m['fragment_sha']=sha(state/'core-pin.json')
+    atomic_text(state/'manifest.json',json.dumps(m))
+    atomic_text(base,candidate.read_text())
+
+
 def rollback(state):
     m=json.loads((state/'manifest.json').read_text());override=ROOT/'docker-compose.override.yml'
-    if sha(ROOT/'docker-compose.yml')!=m['compose_sha']:raise ValueError('Base Compose changed; manual rollback needed')
+    base=ROOT/'docker-compose.yml'
+    baseline=sha(base)
+    if base.is_symlink() or baseline not in (m['compose_sha'],m.get('pinned_base_sha')):raise ValueError('Base Compose changed; manual rollback needed')
     if override.is_symlink():raise ValueError('Override became a symlink')
     if override.exists() and sha(override)!=m.get('override_sha'):raise ValueError('External override change; refuse overwrite')
     if json.loads(run(['docker','image','inspect',m['image_ref']]))[0]['Id']!=m['image']:raise ValueError('Original image tag drifted')
+    if baseline!=m['compose_sha']:
+        saved=state/'compose.before.yml'
+        if sha(saved)!=m['compose_sha']:raise ValueError('Original Compose backup changed')
+        atomic_text(base,saved.read_bytes().decode())
     if m['override_before'] is None:
         if override.exists():override.unlink()
     else:atomic_text(override,m['override_before'])
@@ -204,12 +266,14 @@ def accept(state):
         container=json.loads(run(['docker','inspect','remnanode']))[0]
         if not container['State']['Running']:raise ValueError('Fresh node agent stopped')
         if 'GODEBUG='+godebug(m['godebug']) not in container['Config']['Env']:raise ValueError('MPTCP safeguard absent')
+        persist_core(state,m)
         run(['systemctl','stop',m['unit']+'.timer']);print('FRESH_NODE_BINARY_VERIFIED_CLIENT_TEST_PENDING');return
     if sha(process/'exe')!=m['binary_sha']:raise ValueError('Running core differs from tested artifact')
     env=(process/'environ').read_bytes().split(b'\0')
     if not any(v.startswith(b'GODEBUG=') and b'multipathtcp=0' in v.split(b'=',1)[1].split(b',') for v in env):raise ValueError('MPTCP safeguard missing')
     rows=run(['ss','-M','-lnp']).decode().splitlines()[1:]
     if any('pid='+process.name+',' in row for row in rows):raise ValueError('MPTCP listener on managed core')
+    persist_core(state,m)
     run(['systemctl','stop',m['unit']+'.timer'])
     print('CORE_VERIFIED_AND_AUTOMATIC_RETURN_CANCELLED')
 

@@ -44,6 +44,19 @@ Xray. При новой установке отдельно выбирается
   sudo python3 corectl.py rollback --state /opt/remnanode/.ham-xray/STATE_FROM_OUTPUT
   ```
 
+- При успешном подтверждении установщик добавляет в основной
+  `/opt/remnanode/docker-compose.yml` ссылку Compose `extends` на настройки
+  закреплённого ядра. Даже пересоздание с одним `-f docker-compose.yml`
+  использует тот же бинарник. До подтверждения основной файл не меняется.
+  Клиентский доступ и конфигурация панели не переносятся во фрагмент.
+  Установщик сравнивает эффективные конфигурации до замены; если структура
+  нестандартная или у сервиса уже есть чужой `extends`, он останавливается.
+  Ручной откат проверяет контрольные суммы и возвращает сохранённый основной файл.
+- Уже работающие установки не мигрируют от одного `git pull`. Для них один раз
+  пройдите смену ядра и подтверждение актуальным установщиком. Не удаляйте
+  каталог `.ham-xray`. Если обновлятор сам генерирует новый Compose или вызывает
+  Docker API с собственной спецификацией, привязка нужна в его шаблоне.
+
 - New nodes are explicitly marked fresh: binary/version checks do **not**
   claim client connectivity before a profile is assigned in the panel.
 - For a fresh self-steal certificate, DNS-01 via Cloudflare is the default on
@@ -75,8 +88,8 @@ Xray и исполняемого файла процесса. Код 0 озна�
 Код 2 — требуется проверка: таймер активен, версия отличается, нода не
 управляется этим установщиком или доказательств недостаточно.
 Если после стороннего пересоздания указан `mount DIFF`, проверьте, что
-инструмент пересоздания использовал и `docker-compose.yml`, и
-`docker-compose.override.yml`. Диагностика не исправляет сервер автоматически.
+обновлятор использовал сохранённый основной Compose-файл и не заменил его
+своим шаблоном. Диагностика не исправляет сервер автоматически.
 
 The main menu, version choice, maintenance guidance and principal install
 prompts support RU/EN. Some inherited detailed diagnostics and package-manager
