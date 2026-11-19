@@ -30,7 +30,9 @@ Xray. При новой установке отдельно выбирается
 - Existing live configuration is syntax-tested before recreation. Only the
   `remnanode` service is recreated; no database or user API mutations occur.
 - Existing nodes have an independent **20-minute automatic return**. After
-  URL-test, repeated HTTPS and exit-IP checks, keep the version with:
+  URL-test, repeated HTTPS and exit-IP checks, answer **yes** in the installer
+  to keep the version. Enter/EOF leaves the timer armed. The installer also
+  prints the exact command for a second terminal:
 
   ```bash
   sudo python3 corectl.py accept --state /opt/remnanode/.ham-xray/STATE_FROM_OUTPUT

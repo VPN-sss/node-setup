@@ -79,8 +79,17 @@ PY
     esac
     printf '%s\n' "$(text 'Бинарник установлен. Назначь профиль панели и проверь клиентом — клиентская работа ещё не подтверждена.' 'Binary installed. Assign the panel profile and test a client — end-to-end connectivity is not yet verified.')"
 else
-    python3 "$SCRIPT_DIR/corectl.py" install --channel "$channel"
-    printf '\n%s\n' "$(text 'Автооткат через 20 минут. Проверь URL-test, несколько сайтов и выходной IP.' 'Automatic return in 20 minutes. Test URL delay, several sites and exit IP.')"
-    printf '%s\n' "$(text 'Для фиксации: python3 corectl.py accept --state <PREPARED_STATE из вывода>' 'To keep it: python3 corectl.py accept --state <PREPARED_STATE from output>')"
+    install_log=$(mktemp)
+    trap 'rm -f -- "$install_log"' EXIT
+    python3 "$SCRIPT_DIR/corectl.py" install --channel "$channel" | tee "$install_log"
+    state=$(sed -n 's/^PREPARED_STATE=//p' "$install_log")
+    [[ -d "$state" && "$state" == /opt/remnanode/.ham-xray/* ]] || exit 1
+    printf '\n%s\n' "$(text 'Версия пока временная: через 20 минут вернётся прежняя. Проверь URL-test, несколько сайтов и выходной IP.' 'Temporary version: automatic return in 20 minutes. Test URL delay, several sites and the exit IP.')"
+    printf 'sudo python3 %q accept --state %q\n' "$SCRIPT_DIR/corectl.py" "$state"
+    if confirm_core_tests; then
+        python3 "$SCRIPT_DIR/corectl.py" accept --state "$state"
+    else
+        printf '%s\n' "$(text 'Версия не закреплена. Таймер возврата оставлен включённым.' 'Version NOT accepted. The return timer remains armed.')"
+    fi
 fi
 printf '\n%s\n' "$(text 'Для клиентского REALITY-входа в профиле панели: minClientVer = "1.8.2"; отпечаток хоста — firefox. Не добавляй это в обычный TLS.' 'For the client-facing REALITY panel profile: minClientVer = "1.8.2"; host fingerprint — firefox. Do not add this to ordinary TLS.')"

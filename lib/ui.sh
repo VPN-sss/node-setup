@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+confirm_core_tests() {
+    local answer
+    builtin read -r -p "$(text 'Проверки прошли? Закрепить версию [да/N]: ' 'Did the client tests pass? Keep this version [yes/N]: ')" answer || return 1
+    [[ ${answer,,} == да || ${answer,,} == yes ]]
+}
 text() {
     if [[ ${HAM_LANG:-ru} == ru ]]; then printf '%s' "$1"; else printf '%s' "$2"; fi
 }

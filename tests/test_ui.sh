@@ -10,6 +10,9 @@ load_saved_settings "$task_tmp/settings"
 [[ $DOMAIN == '$(touch '* && $SECRET_KEY == literal-value ]]
 [[ -z ${UNSUPPORTED:-} ]]
 HAM_LANG=ru
+confirm_core_tests <<< да
+if confirm_core_tests <<< '' || confirm_core_tests </dev/null || confirm_core_tests <<< нет; then exit 1; fi
+confirm_core_tests <<< YES
 [[ $(text русский English) == русский ]]
 HAM_LANG=en
 [[ $(text русский English) == English ]]
