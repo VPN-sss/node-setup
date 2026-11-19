@@ -29,14 +29,10 @@ Xray. При новой установке отдельно выбирается
   refused, not overwritten. `GODEBUG=multipathtcp=0` preserves other options.
 - Existing live configuration is syntax-tested before recreation. Only the
   `remnanode` service is recreated; no database or user API mutations occur.
-- Existing nodes have an independent **20-minute automatic return**. After
-  URL-test, repeated HTTPS and exit-IP checks, answer **yes** in the installer
-  to keep the version. Enter/EOF leaves the timer armed. The installer also
-  prints the exact command for a second terminal:
-
-  ```bash
-  sudo python3 corectl.py accept --state /opt/remnanode/.ham-xray/STATE_FROM_OUTPUT
-  ```
+- A single initial confirmation authorizes the change. After recreation the
+  installer verifies and pins the core without a timer or a second prompt.
+  If verification fails, it attempts an immediate rollback. Test the client
+  separately; a broken SSH session or power loss does not schedule recovery.
 
   Restore the previous version with:
 
@@ -44,16 +40,16 @@ Xray. При новой установке отдельно выбирается
   sudo python3 corectl.py rollback --state /opt/remnanode/.ham-xray/STATE_FROM_OUTPUT
   ```
 
-- При успешном подтверждении установщик добавляет в основной
+- После проверки ядра установщик добавляет в основной
   `/opt/remnanode/docker-compose.yml` ссылку Compose `extends` на настройки
   закреплённого ядра. Даже пересоздание с одним `-f docker-compose.yml`
-  использует тот же бинарник. До подтверждения основной файл не меняется.
+  использует тот же бинарник. До проверки основной файл не меняется.
   Клиентский доступ и конфигурация панели не переносятся во фрагмент.
   Установщик сравнивает эффективные конфигурации до замены; если структура
   нестандартная или у сервиса уже есть чужой `extends`, он останавливается.
   Ручной откат проверяет контрольные суммы и возвращает сохранённый основной файл.
 - Уже работающие установки не мигрируют от одного `git pull`. Для них один раз
-  пройдите смену ядра и подтверждение актуальным установщиком. Не удаляйте
+  пройдите смену ядра актуальным установщиком. Не удаляйте
   каталог `.ham-xray`. Если обновлятор сам генерирует новый Compose или вызывает
   Docker API с собственной спецификацией, привязка нужна в его шаблоне.
 

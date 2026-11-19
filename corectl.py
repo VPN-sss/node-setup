@@ -232,7 +232,8 @@ def rollback(state):
     else:atomic_text(override,m['override_before'])
     run(['docker','compose','up','-d','--no-deps','--no-build','--pull','never','remnanode'],timeout=100)
     print('ORIGINAL_CORE_RESTORED')
-    subprocess.run(['systemctl','stop',m['unit']+'.timer'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    if m.get('pin_mode')!='immediate':
+        subprocess.run(['systemctl','stop',m['unit']+'.timer'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
 
 def apply(state):
@@ -246,17 +247,26 @@ def apply(state):
     cfg={MARKER:True,'services':{'remnanode':{'image':m['image'],'environment':{'GODEBUG':godebug(m['godebug'])},'volumes':[{'type':'bind','source':str(state/'xray'),'target':'/usr/local/bin/xray','read_only':True}]}}}
     pending=state/'override.next.json';pending.write_text(json.dumps(cfg,indent=2))
     run(['docker','compose','-f',str(ROOT/'docker-compose.yml'),'-f',str(pending),'config','--quiet'])
-    m['override_sha']=sha(pending);atomic_text(state/'manifest.json',json.dumps(m))
-    run(['systemd-run','--unit='+m['unit'],'--on-active=20m','/usr/bin/python3',str(state/'operation.py'),'rollback','--state',str(state)])
+    if sha(state/'operation.py')!=sha(__file__):raise ValueError('Prepare again with the current installer')
+    m.update(override_sha=sha(pending),pin_mode='immediate');atomic_text(state/'manifest.json',json.dumps(m))
     atomic_text(override,pending.read_text())
-    try:run(['docker','compose','-f',str(ROOT/'docker-compose.yml'),'-f',str(override),'up','-d','--no-deps','--no-build','--pull','never','remnanode'],timeout=100)
+    try:
+        run(['docker','compose','-f',str(ROOT/'docker-compose.yml'),'-f',str(override),'up','-d','--no-deps','--no-build','--pull','never','remnanode'],timeout=100)
+        deadline=time.monotonic()+60
+        while True:
+            try:
+                accept(state)
+                break
+            except (NoRunningCore,ConnectionRefusedError,FileNotFoundError):
+                if time.monotonic()>=deadline:raise
+                time.sleep(2)
     except BaseException:
         rollback(state);raise
-    print('APPLIED_WITH_20_MINUTE_AUTOMATIC_RETURN')
 
 
 def accept(state):
     m=json.loads((state/'manifest.json').read_text())
+    if m.get('pin_mode')!='immediate':raise ValueError('Use the operation.py saved with this legacy transaction')
     if sha(ROOT/'docker-compose.override.yml')!=m['override_sha']:raise ValueError('Override drift')
     try:_,process=runtime()
     except NoRunningCore:
@@ -267,15 +277,14 @@ def accept(state):
         if not container['State']['Running']:raise ValueError('Fresh node agent stopped')
         if 'GODEBUG='+godebug(m['godebug']) not in container['Config']['Env']:raise ValueError('MPTCP safeguard absent')
         persist_core(state,m)
-        run(['systemctl','stop',m['unit']+'.timer']);print('FRESH_NODE_BINARY_VERIFIED_CLIENT_TEST_PENDING');return
+        print('FRESH_NODE_BINARY_VERIFIED_CLIENT_TEST_PENDING');return
     if sha(process/'exe')!=m['binary_sha']:raise ValueError('Running core differs from tested artifact')
     env=(process/'environ').read_bytes().split(b'\0')
     if not any(v.startswith(b'GODEBUG=') and b'multipathtcp=0' in v.split(b'=',1)[1].split(b',') for v in env):raise ValueError('MPTCP safeguard missing')
     rows=run(['ss','-M','-lnp']).decode().splitlines()[1:]
     if any('pid='+process.name+',' in row for row in rows):raise ValueError('MPTCP listener on managed core')
     persist_core(state,m)
-    run(['systemctl','stop',m['unit']+'.timer'])
-    print('CORE_VERIFIED_AND_AUTOMATIC_RETURN_CANCELLED')
+    print('CORE_VERIFIED_AND_PINNED')
 
 
 def main():
@@ -294,7 +303,6 @@ def main():
         state=prepare(args.channel,args.fresh)
         if args.action=='install':
             apply(state)
-            if args.fresh:accept(state)
     else:
         if not args.state:raise ValueError('--state is required')
         globals()[args.action](state_path(args.state))

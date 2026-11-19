@@ -8,6 +8,7 @@ if [[ ${1:-} == --help ]]; then
 fi
 if [[ ${1:-} == --status && $# == 1 ]]; then exec python3 "$SCRIPT_DIR/doctor.py"; fi
 if (( $# )); then printf 'Unknown arguments. See --help.\n' >&2; exit 2; fi
+banner
 title 'Язык / Language'
 printf '  [1]  Русский\n  [2]  English\n\n'
 builtin read -r -p 'Language / Язык [1]: ' language
@@ -15,7 +16,7 @@ case "$language" in ''|1) export HAM_LANG=ru;;2) export HAM_LANG=en;;*) exit 1;;
 title "$(text 'Установка и обслуживание ноды' 'Node installation and maintenance')"
 [[ $EUID == 0 ]] || { printf '%s\n' "$(text 'Запусти через sudo.' 'Run with sudo.')";exit 1; }
 option 1 "$(text 'Новая нода' 'New node')" "$(text 'Установить агент и выбрать версию ядра.' 'Install the agent and select a core version.')"
-option 2 "$(text 'Смена Xray' 'Change Xray')" "$(text 'Сохранить настройки. Автовозврат через 20 минут без подтверждения.' 'Keep settings. Automatic return in 20 minutes unless accepted.')"
+option 2 "$(text 'Смена Xray' 'Change Xray')" "$(text 'Проверить и закрепить ядро без таймера.' 'Verify and pin the core without a timer.')"
 option 3 "$(text 'Диагностика' 'Diagnostics')" "$(text 'Сравнить конфигурацию и работающее ядро. Без изменений.' 'Compare configuration and running core. No changes.')"
 option 0 "$(text 'Выйти' 'Exit')" "$(text 'Ничего не менять.' 'Leave everything unchanged.')"
 builtin read -r -p "$(text 'Действие [2]: ' 'Action [2]: ')" action
@@ -34,11 +35,11 @@ printf '  2. %s\n\n' "$(text 'Проверенный Xray 26.7.28 — Firefox/mi
 builtin read -r -p "$(text 'Версия [1/2, Enter — отмена]: ' 'Version [1/2, Enter — cancel]: ')" version
 case "$version" in 1) channel=latest;;2) channel=verified;;'') exit 0;;*) exit 1;;esac
 if [[ $channel == latest ]]; then
-    printf '%s\n' "$(text 'Последний релиз может не работать со старыми Koala/mihomo и Firefox. Для проверенного варианта выбери 26.7.28.' 'The latest release may not work with older Koala/mihomo and Firefox. Choose 26.7.28 for the tested compatibility option.')"
+    notice '1;33' "$(text 'Последний релиз может не работать со старыми Koala/mihomo и Firefox. Для проверенного варианта выбери 26.7.28.' 'The latest release may not work with older Koala/mihomo and Firefox. Choose 26.7.28 for the tested compatibility option.')"
     prompt=$(text 'Продолжить с последним релизом? [y/N]: ' 'Continue with the latest release? [y/N]: ')
 fi
 if [[ $channel == verified ]]; then
-    printf '%s\n' "$(text 'Это старый релиз, а не гарантия безопасности или обхода. MPTCP будет отключён для процесса.' 'Older release, not a security or bypass guarantee. Process MPTCP will be disabled.')"
+    notice '1;33' "$(text 'Это старый релиз, а не гарантия безопасности или обхода. MPTCP будет отключён для процесса.' 'Older release, not a security or bypass guarantee. Process MPTCP will be disabled.')"
     prompt=$(text 'Продолжить с 26.7.28? [y/N]: ' 'Continue with 26.7.28? [y/N]: ')
 fi
 if ! ask_yes_no "$prompt"; then
@@ -88,28 +89,10 @@ PY
     esac
     printf '%s\n' "$(text 'Бинарник установлен. Назначь профиль панели и проверь клиентом — клиентская работа ещё не подтверждена.' 'Binary installed. Assign the panel profile and test a client — end-to-end connectivity is not yet verified.')"
 else
-    install_log=$(mktemp)
-    trap 'rm -f -- "$install_log"' EXIT
-    if ! python3 -u "$SCRIPT_DIR/corectl.py" install --channel "$channel" | tee "$install_log"; then
-        printf '%s\n' "$(text 'Установка не завершена. См. ошибку выше. Проверь состояние: sudo bash install.sh --status' 'Installation did not complete. See the error above. Check: sudo bash install.sh --status')" >&2
+    if ! python3 -u "$SCRIPT_DIR/corectl.py" install --channel "$channel"; then
+        notice '1;31' "$(text 'Не удалось завершить смену. См. ошибку выше. Проверка: sudo bash install.sh --status' 'Change failed. See error above. Check: sudo bash install.sh --status')" >&2
         exit 1
     fi
-    state=$(sed -n 's/^PREPARED_STATE=//p' "$install_log")
-    if [[ ! -d "$state" || "$state" != /opt/remnanode/.ham-xray/* ]]; then
-        printf '%s\n' "$(text 'Не найден каталог операции. Подтверждение пропущено. Проверь: sudo bash install.sh --status' 'Missing operation directory. Acceptance skipped. Check: sudo bash install.sh --status')" >&2
-        exit 1
-    fi
-    printf '\n%s\n' "$(text 'Версия пока временная: через 20 минут вернётся прежняя. Проверь URL-test, несколько сайтов и выходной IP.' 'Temporary version: automatic return in 20 minutes. Test URL delay, several sites and the exit IP.')"
-    printf 'sudo python3 %q accept --state %q\n' "$SCRIPT_DIR/corectl.py" "$state"
-    if confirm_core_tests; then
-        if python3 "$SCRIPT_DIR/corectl.py" accept --state "$state"; then
-            printf '%s\n' "$(text 'Версия закреплена. Таймер возврата отключён.' 'Version pinned. Return timer disabled.')"
-        else
-            printf '%s\n' "$(text 'Закрепление не подтверждено. Не отключай таймер вручную. Проверь: sudo bash install.sh --status' 'Pin not confirmed. Do not disable the timer manually. Check: sudo bash install.sh --status')" >&2
-            exit 1
-        fi
-    else
-        printf '%s\n' "$(text 'Версия не закреплена. Таймер возврата оставлен включённым.' 'Version NOT accepted. The return timer remains armed.')"
-    fi
+    notice '1;32' "$(text 'Версия закреплена. Проверь сайты и выходной IP в клиенте.' 'Version pinned. Test websites and the exit IP in your client.')"
 fi
 printf '\n%s\n' "$(text 'Для клиентского REALITY-входа в профиле панели: minClientVer = "1.8.2"; отпечаток хоста — firefox. Не добавляй это в обычный TLS.' 'For the client-facing REALITY panel profile: minClientVer = "1.8.2"; host fingerprint — firefox. Do not add this to ordinary TLS.')"

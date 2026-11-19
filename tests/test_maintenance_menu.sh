@@ -16,25 +16,17 @@ python3() {
         install)
             [[ "$3 $4" == '--channel verified' ]] || return 1
             [[ ${SIMULATE:-} != error ]] || return 42
-            [[ ${SIMULATE:-} == missing ]] || printf '%s\n' PREPARED_STATE=/opt/remnanode/.ham-xray/test ;;
-        accept)
-            [[ "$3 $4" == '--state /opt/remnanode/.ham-xray/test' ]] || return 1
-            printf 'ACCEPT_CALLED\n'
-            [[ ${SIMULATE:-} != accept_error ]] ;;
+            printf '%s\n' PREPARED_STATE=/opt/remnanode/.ham-xray/test ;;
         *) return 1 ;;
     esac
 }
 export -f python3
-output=$(printf '2\n2\n2\nY\nY\n' | bash install.sh 2>&1)
-[[ $output == *ACCEPT_CALLED* && $output == *'Return timer disabled.'* ]]
-output=$(printf '1\n2\n2\nошибка\nДа\nДА\n' | bash install.sh 2>&1)
-[[ $output == *'Введите Y'* && $output == *'Таймер возврата отключён.'* ]]
 output=$(printf '2\n2\n2\nY\n' | bash install.sh 2>&1)
-[[ $output == *'timer remains armed'* && $output != *ACCEPT_CALLED* ]]
+[[ $output == *'Version pinned.'* && $output != *'tests pass?'* ]]
+output=$(printf '1\n2\n2\nошибка\nДа\n' | bash install.sh 2>&1)
+[[ $output == *'Введите Y'* && $output == *'Версия закреплена.'* ]]
 output=$(printf '2\n2\n2\nN\n' | bash install.sh 2>&1)
 [[ $output == *'Node unchanged.'* && $output != *PREPARED_STATE* ]]
-for failure in error missing accept_error; do
-    if output=$(printf '2\n2\n2\nY\nY\n' | SIMULATE=$failure bash install.sh 2>&1); then exit 1; fi
-    [[ $output == *'install.sh --status'* && $output != *'Return timer disabled.'* ]]
-done
+if output=$(printf '2\n2\n2\nY\n' | SIMULATE=error bash install.sh 2>&1); then exit 1; fi
+[[ $output == *'install.sh --status'* && $output != *'Version pinned.'* ]]
 printf 'MAINTENANCE_MENU_PASSED\n'

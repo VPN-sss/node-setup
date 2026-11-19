@@ -10,16 +10,16 @@ load_saved_settings "$task_tmp/settings"
 [[ $DOMAIN == '$(touch '* && $SECRET_KEY == literal-value ]]
 [[ -z ${UNSUPPORTED:-} ]]
 HAM_LANG=ru
-confirm_core_tests <<< да
-if confirm_core_tests <<< '' || confirm_core_tests </dev/null || confirm_core_tests <<< нет; then exit 1; fi
-confirm_core_tests <<< YES
+ask_yes_no 'Y/N: ' <<< да
+if ask_yes_no 'Y/N: ' <<< '' || ask_yes_no 'Y/N: ' </dev/null || ask_yes_no 'Y/N: ' <<< нет; then exit 1; fi
+ask_yes_no 'Y/N: ' <<< YES
 [[ $(text русский English) == русский ]]
 HAM_LANG=en
 [[ $(text русский English) == English ]]
 output=$(bash "$root/install.sh" --help)
 [[ $output == *'interactive RU/EN'* ]]
 [[ $output == *'--status'* ]]
-menu=$(NO_COLOR=1 title 'Core version'; option 3 Diagnostics 'Read only')
+menu=$(NO_COLOR=1 banner; NO_COLOR=1 title 'Core version'; option 3 Diagnostics 'Read only')
 [[ $menu == *'HAM  /  NODE'* && $menu == *'[3]  Diagnostics'* && $menu != *$'\033'* ]]
 if bash "$root/install.sh" --typo </dev/null; then exit 1; fi
 printf 'UI_TESTS_PASSED: dotenv is data, whitelist, RU, EN, help\n'

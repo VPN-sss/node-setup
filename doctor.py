@@ -43,6 +43,8 @@ def inspect_pin():
         return fields,'unverified'
     fields['process']=core.sha(Path('/proc')/matches[0]/'exe')==m['binary_sha']
     if not fields['process'] or not fields['image']:return fields,'drift'
+    if m.get('pin_mode')=='immediate':
+        return fields,'pinned' if 'pinned_base_sha' in m and 'fragment_sha' in m else 'unverified'
     timer=subprocess.run(['systemctl','show','-p','ActiveState','--value',m['unit']+'.timer'],
                          capture_output=True,text=True,timeout=8)
     if timer.returncode or timer.stdout.strip() not in ('active','inactive'):return fields,'unknown'
@@ -52,6 +54,7 @@ def inspect_pin():
 def main():
     ru=os.getenv('HAM_LANG','ru')=='ru'
     messages={
+        'pinned':('Работающее ядро проверено и закреплено.','Running core verified and pinned.'),
         'matched':('Работающее ядро совпадает; таймер возврата не активен.','Running core matches; return timer inactive.'),
         'temporary':('Ядро совпадает, но таймер возврата ещё активен.','Core matches, but the return timer is still active.'),
         'drift':('Конфигурация или ядро отличается от сохранённого.','Configuration or core differs from the recorded state.'),
@@ -65,7 +68,7 @@ def main():
     for key,value in fields.items():
         print(f'  {key:8}  {("OK" if value else "DIFF") if isinstance(value,bool) else value}')
     print(messages[status][0 if ru else 1])
-    return 0 if status=='matched' else 2
+    return 0 if status in ('matched','pinned') else 2
 
 
 if __name__=='__main__':sys.exit(main())

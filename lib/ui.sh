@@ -14,9 +14,6 @@ ask_yes_no() {
         esac
     done
 }
-confirm_core_tests() {
-    ask_yes_no "$(text 'Проверки прошли? Закрепить версию [y/N]: ' 'Did the client tests pass? Keep this version [y/N]: ')"
-}
 text() {
     if [[ ${HAM_LANG:-ru} == ru ]]; then printf '%s' "$1"; else printf '%s' "$2"; fi
 }
@@ -39,15 +36,29 @@ ask_value() {
     [[ $value != *$'\r'* && $value != *$'\n'* ]] || return 1
     printf -v "$key" '%s' "$value"
 }
-title() {
-    local accent='' reset=''
+paint() {
     if [[ -t 1 && -z ${NO_COLOR+x} && ${TERM:-dumb} != dumb ]]; then
-        accent=$'\033[1;36m'; reset=$'\033[0m'
-    fi
-    printf '\n%sHAM  /  NODE%s\n%s\n────────────────────────────────────\n' "$accent" "$reset" "$1"
+        printf '\033[%sm%s\033[0m' "$1" "$2"
+    else printf '%s' "$2"; fi
+}
+banner() {
+    printf '\n'
+    paint '1;36' '  █  █   ██   █   █
+  ████  █  █  ██ ██
+  █  █  ████  █ █ █
+  █  █  █  █  █   █'
+    printf '\n'
+    paint '1;35' '  HAM  /  NODE'
+    printf '\n'
+}
+title() {
+    printf '\n'; paint '1;36' "$1"; printf '\n────────────────────────────────────\n'
 }
 option() {
-    printf '  [%s]  %s\n       %s\n' "$1" "$2" "$3"
+    printf '  '; paint '1;35' "[$1]"; printf '  %s\n       %s\n' "$2" "$3"
+}
+notice() {
+    paint "$1" "$2"; printf '\n'
 }
 translate() {
     [[ ${HAM_LANG:-ru} == ru ]] || { printf '%s' "$1"; return; }
