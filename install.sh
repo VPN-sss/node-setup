@@ -4,17 +4,23 @@ umask 077
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/lib/ui.sh"
 if [[ ${1:-} == --help ]]; then
-    printf 'HAM node installer · interactive RU/EN\nsudo bash install.sh — new node or Xray-only maintenance\npython3 corectl.py --help — guarded core preparation/rollback\n';exit 0
+    printf 'HAM node installer · interactive RU/EN\nsudo bash install.sh — new node or Xray-only maintenance\nsudo bash install.sh --status — read-only pin and runtime check\npython3 corectl.py --help — guarded core preparation/rollback\n';exit 0
 fi
-printf '\n  HAM · NODE SETUP\n\n  1. Русский\n  2. English\n\n'
+if [[ ${1:-} == --status && $# == 1 ]]; then exec python3 "$SCRIPT_DIR/doctor.py"; fi
+if (( $# )); then printf 'Unknown arguments. See --help.\n' >&2; exit 2; fi
+title 'Язык / Language'
+printf '  [1]  Русский\n  [2]  English\n\n'
 builtin read -r -p 'Language / Язык [1]: ' language
 case "$language" in ''|1) export HAM_LANG=ru;;2) export HAM_LANG=en;;*) exit 1;;esac
 title "$(text 'Установка и обслуживание ноды' 'Node installation and maintenance')"
 [[ $EUID == 0 ]] || { printf '%s\n' "$(text 'Запусти через sudo.' 'Run with sudo.')";exit 1; }
-printf '  1. %s\n' "$(text 'Установить новую ноду' 'Install a new node')"
-printf '  2. %s\n\n' "$(text 'Сменить только Xray — сохранить остальные настройки' 'Change Xray only — preserve other settings')"
+option 1 "$(text 'Новая нода' 'New node')" "$(text 'Установить агент и выбрать версию ядра.' 'Install the agent and select a core version.')"
+option 2 "$(text 'Смена Xray' 'Change Xray')" "$(text 'Сохранить настройки. Автовозврат через 20 минут без подтверждения.' 'Keep settings. Automatic return in 20 minutes unless accepted.')"
+option 3 "$(text 'Диагностика' 'Diagnostics')" "$(text 'Сравнить конфигурацию и работающее ядро. Без изменений.' 'Compare configuration and running core. No changes.')"
+option 0 "$(text 'Выйти' 'Exit')" "$(text 'Ничего не менять.' 'Leave everything unchanged.')"
 builtin read -r -p "$(text 'Действие [2]: ' 'Action [2]: ')" action
 action=${action:-2}
+case "$action" in 0) exit 0;;3) exec python3 "$SCRIPT_DIR/doctor.py";;esac
 [[ $action == 1 || $action == 2 ]] || exit 1
 if [[ $action == 1 && -e /opt/remnanode/docker-compose.yml ]]; then
     printf '%s\n' "$(text 'Нода уже установлена. Используй режим смены Xray.' 'Node already exists. Use Xray-only maintenance.')";exit 1
@@ -22,6 +28,7 @@ fi
 if [[ $action == 2 && ! -f /opt/remnanode/docker-compose.yml ]]; then
     printf '%s\n' "$(text 'Действующая нода в /opt/remnanode не найдена.' 'No existing node in /opt/remnanode.')";exit 1
 fi
+title "$(text 'Версия ядра' 'Core version')"
 printf '\n  1. %s\n' "$(text 'Последний Xray — официальный актуальный релиз' 'Latest Xray — current official release')"
 printf '  2. %s\n\n' "$(text 'Проверенный Xray 26.7.28 — Firefox/mihomo' 'Tested Xray 26.7.28 — Firefox/mihomo')"
 builtin read -r -p "$(text 'Версия [1/2, Enter — отмена]: ' 'Version [1/2, Enter — cancel]: ')" version

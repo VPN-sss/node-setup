@@ -18,4 +18,8 @@ HAM_LANG=en
 [[ $(text русский English) == English ]]
 output=$(bash "$root/install.sh" --help)
 [[ $output == *'interactive RU/EN'* ]]
+[[ $output == *'--status'* ]]
+menu=$(NO_COLOR=1 title 'Core version'; option 3 Diagnostics 'Read only')
+[[ $menu == *'HAM  /  NODE'* && $menu == *'[3]  Diagnostics'* && $menu != *$'\033'* ]]
+if bash "$root/install.sh" --typo </dev/null; then exit 1; fi
 printf 'UI_TESTS_PASSED: dotenv is data, whitelist, RU, EN, help\n'

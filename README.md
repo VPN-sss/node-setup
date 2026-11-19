@@ -61,6 +61,23 @@ Xray. При новой установке отдельно выбирается
 
 ### Language / Язык
 
+**Проверка после перезагрузки или пересоздания контейнера (без изменений):**
+
+```bash
+sudo bash install.sh --status
+# English:
+sudo env HAM_LANG=en bash install.sh --status
+```
+
+Проверяются сохранённый Compose, bind mount, образ контейнера, SHA256 файла
+Xray и исполняемого файла процесса. Код 0 означает совпадение и неактивный
+таймер возврата, но не подтверждает доступность VPN с компьютера клиента.
+Код 2 — требуется проверка: таймер активен, версия отличается, нода не
+управляется этим установщиком или доказательств недостаточно.
+Если после стороннего пересоздания указан `mount DIFF`, проверьте, что
+инструмент пересоздания использовал и `docker-compose.yml`, и
+`docker-compose.override.yml`. Диагностика не исправляет сервер автоматически.
+
 The main menu, version choice, maintenance guidance and principal install
 prompts support RU/EN. Some inherited detailed diagnostics and package-manager
 output remain English. WARP is optional and disabled unless requested.

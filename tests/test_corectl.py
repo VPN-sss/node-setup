@@ -9,6 +9,19 @@ spec=importlib.util.spec_from_file_location('corectl',Path(__file__).parents[1]/
 core=importlib.util.module_from_spec(spec);spec.loader.exec_module(core)
 
 class CorePolicyTests(unittest.TestCase):
+    def test_pending_return_blocks_overlapping_changes(self):
+        with patch.object(core,'run',return_value=b'ham-xray-return-example.timer') as run:
+            with self.assertRaisesRegex(ValueError,'active rollback timer'):core.apply(Path('unused'))
+            self.assertEqual(run.call_count,1)
+
+    def test_atomic_replace_failure_preserves_original(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'override';path.write_text('original')
+            with patch.object(core.os,'replace',side_effect=OSError()):
+                with self.assertRaises(OSError):core.atomic_text(path,'changed')
+            self.assertEqual(path.read_text(),'original')
+            self.assertEqual(list(path.parent.iterdir()),[path])
+
     def test_verified_artifact_is_pinned(self):
         version,url,digest=core.artifact('verified','x86_64')
         self.assertEqual(version,'26.7.28');self.assertIn('/v26.7.28/Xray-linux-64.zip',url);self.assertEqual(len(digest),64)

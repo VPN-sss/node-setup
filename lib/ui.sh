@@ -27,7 +27,14 @@ ask_value() {
     printf -v "$key" '%s' "$value"
 }
 title() {
-    printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n  HAM · %s\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' "$1"
+    local accent='' reset=''
+    if [[ -t 1 && -z ${NO_COLOR+x} && ${TERM:-dumb} != dumb ]]; then
+        accent=$'\033[1;36m'; reset=$'\033[0m'
+    fi
+    printf '\n%sHAM  /  NODE%s\n%s\n────────────────────────────────────\n' "$accent" "$reset" "$1"
+}
+option() {
+    printf '  [%s]  %s\n       %s\n' "$1" "$2" "$3"
 }
 translate() {
     [[ ${HAM_LANG:-ru} == ru ]] || { printf '%s' "$1"; return; }

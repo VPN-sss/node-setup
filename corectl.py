@@ -13,6 +13,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 import zipfile
@@ -55,11 +56,17 @@ def artifact(channel,machine=None):
     return version,url,expected[7:]
 
 
+class NoRunningCore(RuntimeError):
+    pass
+
+
 def runtime():
     rows=run(['docker','top','remnanode','-eo','pid,comm']).decode().splitlines()[1:]
+    observed=False
     for row in rows:
         pid,comm=row.split(None,1)
         if comm.strip() not in {'rw-core','xray'}:continue
+        observed=True
         process=Path('/proc')/pid
         args=(process/'cmdline').read_bytes().decode().split('\0')
         if '-config' not in args:continue
@@ -78,7 +85,8 @@ def runtime():
             cfg=json.loads(response.read());client.close();return cfg,process
         if uri.startswith('/'):
             return json.loads((process/'root'/uri.lstrip('/')).read_text()),process
-    raise RuntimeError('Running Xray configuration unavailable; no live update performed')
+    if observed:raise RuntimeError('Core is running but its configuration could not be verified')
+    raise NoRunningCore('No running Xray process found')
 
 
 def managed_override(raw):
@@ -103,7 +111,7 @@ def check_core(state,image,version,fresh=False):
     output=run(base+[image,'version']).decode()
     if not output.startswith('Xray '+version+' '):raise ValueError('Downloaded binary version mismatch')
     try:cfg,_=runtime()
-    except RuntimeError:
+    except NoRunningCore:
         if not fresh:raise
         cfg={'inbounds':[],'outbounds':[{'protocol':'freedom'}]}
     (state/'runtime.before.json').write_text(json.dumps(cfg))
@@ -141,6 +149,16 @@ def prepare(channel,fresh=False):
     print('PREPARED_STATE='+str(state));return state
 
 
+def atomic_text(path, text):
+    fd,name=tempfile.mkstemp(prefix='.'+path.name+'.',dir=path.parent)
+    try:
+        with os.fdopen(fd,'wb') as file:
+            file.write(text.encode());file.flush();os.fsync(file.fileno())
+        os.replace(name,path)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+
 def rollback(state):
     m=json.loads((state/'manifest.json').read_text());override=ROOT/'docker-compose.override.yml'
     if sha(ROOT/'docker-compose.yml')!=m['compose_sha']:raise ValueError('Base Compose changed; manual rollback needed')
@@ -149,13 +167,16 @@ def rollback(state):
     if json.loads(run(['docker','image','inspect',m['image_ref']]))[0]['Id']!=m['image']:raise ValueError('Original image tag drifted')
     if m['override_before'] is None:
         if override.exists():override.unlink()
-    else:override.write_text(m['override_before'])
+    else:atomic_text(override,m['override_before'])
     run(['docker','compose','up','-d','--no-deps','--no-build','--pull','never','remnanode'],timeout=100)
     print('ORIGINAL_CORE_RESTORED')
     subprocess.run(['systemctl','stop',m['unit']+'.timer'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
 
 def apply(state):
+    pending_timers=run(['systemctl','list-units','--type=timer','--state=active,activating',
+                        '--no-legend','--plain','ham-xray-return-*.timer'])
+    if pending_timers.strip():raise ValueError('Previous Xray change still has an active rollback timer')
     m=json.loads((state/'manifest.json').read_text());override=ROOT/'docker-compose.override.yml'
     if time.time()-m['prepared_at']>3600:raise ValueError('Prepare again: state older than one hour')
     before=override.read_text() if override.exists() else None
@@ -163,10 +184,10 @@ def apply(state):
     cfg={MARKER:True,'services':{'remnanode':{'image':m['image'],'environment':{'GODEBUG':godebug(m['godebug'])},'volumes':[{'type':'bind','source':str(state/'xray'),'target':'/usr/local/bin/xray','read_only':True}]}}}
     pending=state/'override.next.json';pending.write_text(json.dumps(cfg,indent=2))
     run(['docker','compose','-f',str(ROOT/'docker-compose.yml'),'-f',str(pending),'config','--quiet'])
+    m['override_sha']=sha(pending);atomic_text(state/'manifest.json',json.dumps(m))
     run(['systemd-run','--unit='+m['unit'],'--on-active=20m','/usr/bin/python3',str(state/'operation.py'),'rollback','--state',str(state)])
-    override.write_text(pending.read_text());override.chmod(0o600)
-    m['override_sha']=sha(override);(state/'manifest.json').write_text(json.dumps(m))
-    try:run(['docker','compose','up','-d','--no-deps','--no-build','--pull','never','remnanode'],timeout=100)
+    atomic_text(override,pending.read_text())
+    try:run(['docker','compose','-f',str(ROOT/'docker-compose.yml'),'-f',str(override),'up','-d','--no-deps','--no-build','--pull','never','remnanode'],timeout=100)
     except BaseException:
         rollback(state);raise
     print('APPLIED_WITH_20_MINUTE_AUTOMATIC_RETURN')
@@ -176,7 +197,7 @@ def accept(state):
     m=json.loads((state/'manifest.json').read_text())
     if sha(ROOT/'docker-compose.override.yml')!=m['override_sha']:raise ValueError('Override drift')
     try:_,process=runtime()
-    except RuntimeError:
+    except NoRunningCore:
         if not m.get('fresh'):raise
         actual=run(['docker','exec','remnanode','sha256sum','/usr/local/bin/xray']).decode().split()[0]
         if actual!=m['binary_sha']:raise ValueError('Installed binary differs from tested artifact')
