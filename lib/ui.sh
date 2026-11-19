@@ -1,8 +1,21 @@
 #!/usr/bin/env bash
-confirm_core_tests() {
+ask_yes_no() {
     local answer
-    builtin read -r -p "$(text 'Проверки прошли? Закрепить версию [да/N]: ' 'Did the client tests pass? Keep this version [yes/N]: ')" answer || return 1
-    [[ ${answer,,} == да || ${answer,,} == yes ]]
+    while :; do
+        printf '%s' "$1" >&2
+        if ! builtin read -r answer; then
+            printf '\n%s\n' "$(text 'Ввод завершён без подтверждения.' 'Input closed without confirmation.')" >&2
+            return 1
+        fi
+        case ${answer,,} in
+            y|yes|д|да) return 0 ;;
+            ''|n|no|н|нет) return 1 ;;
+            *) printf '%s\n' "$(text 'Введите Y (да) или N (нет).' 'Enter Y (yes) or N (no).')" >&2 ;;
+        esac
+    done
+}
+confirm_core_tests() {
+    ask_yes_no "$(text 'Проверки прошли? Закрепить версию [y/N]: ' 'Did the client tests pass? Keep this version [y/N]: ')"
 }
 text() {
     if [[ ${HAM_LANG:-ru} == ru ]]; then printf '%s' "$1"; else printf '%s' "$2"; fi

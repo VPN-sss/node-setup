@@ -35,14 +35,16 @@ builtin read -r -p "$(text 'Версия [1/2, Enter — отмена]: ' 'Versi
 case "$version" in 1) channel=latest;;2) channel=verified;;'') exit 0;;*) exit 1;;esac
 if [[ $channel == latest ]]; then
     printf '%s\n' "$(text 'Последний релиз может не работать со старыми Koala/mihomo и Firefox. Для проверенного варианта выбери 26.7.28.' 'The latest release may not work with older Koala/mihomo and Firefox. Choose 26.7.28 for the tested compatibility option.')"
-    builtin read -r -p "$(text 'Продолжить с последним релизом? [y/N]: ' 'Continue with the latest release? [y/N]: ')" confirm
-    [[ $confirm =~ ^[Yy]$ ]] || exit 0
+    prompt=$(text 'Продолжить с последним релизом? [y/N]: ' 'Continue with the latest release? [y/N]: ')
 fi
 if [[ $channel == verified ]]; then
     printf '%s\n' "$(text 'Это старый релиз, а не гарантия безопасности или обхода. MPTCP будет отключён для процесса.' 'Older release, not a security or bypass guarantee. Process MPTCP will be disabled.')"
-    builtin read -r -p "$(text 'Продолжить с 26.7.28? [y/N]: ' 'Continue with 26.7.28? [y/N]: ')" confirm
-    [[ $confirm =~ ^[Yy]$ ]] || exit 0
+    prompt=$(text 'Продолжить с 26.7.28? [y/N]: ' 'Continue with 26.7.28? [y/N]: ')
 fi
+if ! ask_yes_no "$prompt"; then
+    printf '%s\n' "$(text 'Отменено. Нода не изменена.' 'Cancelled. Node unchanged.')"; exit 0
+fi
+printf '%s\n' "$(text 'Начинаю подготовку выбранной версии.' 'Preparing the selected version.')"
 if [[ $action == 1 ]]; then
     builtin read -r -p "$(text 'Ставим self-steal — свой домен, HTTPS-сайт и сертификат? Да / Нет: ' 'Enable self-steal — own domain, HTTPS site and certificate? Yes / No: ')" selfsteal
     case "$selfsteal" in
@@ -88,13 +90,24 @@ PY
 else
     install_log=$(mktemp)
     trap 'rm -f -- "$install_log"' EXIT
-    python3 "$SCRIPT_DIR/corectl.py" install --channel "$channel" | tee "$install_log"
+    if ! python3 -u "$SCRIPT_DIR/corectl.py" install --channel "$channel" | tee "$install_log"; then
+        printf '%s\n' "$(text 'Установка не завершена. См. ошибку выше. Проверь состояние: sudo bash install.sh --status' 'Installation did not complete. See the error above. Check: sudo bash install.sh --status')" >&2
+        exit 1
+    fi
     state=$(sed -n 's/^PREPARED_STATE=//p' "$install_log")
-    [[ -d "$state" && "$state" == /opt/remnanode/.ham-xray/* ]] || exit 1
+    if [[ ! -d "$state" || "$state" != /opt/remnanode/.ham-xray/* ]]; then
+        printf '%s\n' "$(text 'Не найден каталог операции. Подтверждение пропущено. Проверь: sudo bash install.sh --status' 'Missing operation directory. Acceptance skipped. Check: sudo bash install.sh --status')" >&2
+        exit 1
+    fi
     printf '\n%s\n' "$(text 'Версия пока временная: через 20 минут вернётся прежняя. Проверь URL-test, несколько сайтов и выходной IP.' 'Temporary version: automatic return in 20 minutes. Test URL delay, several sites and the exit IP.')"
     printf 'sudo python3 %q accept --state %q\n' "$SCRIPT_DIR/corectl.py" "$state"
     if confirm_core_tests; then
-        python3 "$SCRIPT_DIR/corectl.py" accept --state "$state"
+        if python3 "$SCRIPT_DIR/corectl.py" accept --state "$state"; then
+            printf '%s\n' "$(text 'Версия закреплена. Таймер возврата отключён.' 'Version pinned. Return timer disabled.')"
+        else
+            printf '%s\n' "$(text 'Закрепление не подтверждено. Не отключай таймер вручную. Проверь: sudo bash install.sh --status' 'Pin not confirmed. Do not disable the timer manually. Check: sudo bash install.sh --status')" >&2
+            exit 1
+        fi
     else
         printf '%s\n' "$(text 'Версия не закреплена. Таймер возврата оставлен включённым.' 'Version NOT accepted. The return timer remains armed.')"
     fi
